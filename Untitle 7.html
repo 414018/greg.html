@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>隨機座位產生器 - 終極版</title>
+    <style>
+        :root { --primary: #2c3e50; --accent: #3498db; --bg: #ecf0f1; }
+        body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background: var(--bg); padding: 20px; color: #333; }
+        .container { max-width: 1100px; margin: auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+        h2 { text-align: center; color: var(--primary); margin-bottom: 25px; }
+        
+        /* 設定區塊 */
+        .setup-card { background: #f8f9fa; padding: 25px; border-radius: 12px; border: 1px solid #dee2e6; }
+        
+        .control-row { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 15px; }
+        .control-group { flex: 1; min-width: 250px; }
+        
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #444; }
+        textarea, input, select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 15px; }
+        textarea { height: 80px; resize: vertical; }
+
+        /* 按鈕樣式 */
+        .btn-toggle-group { display: flex; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; }
+        .btn-toggle { flex: 1; padding: 10px; border: none; background: #fff; cursor: pointer; transition: 0.2s; font-weight: bold; color: #666; }
+        .btn-toggle.active { background: var(--accent); color: white; }
+        
+        .btn-generate { width: 100%; padding: 16px; background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold; margin-top: 25px; transition: 0.3s; }
+        .btn-generate:hover { background: #2980b9; transform: translateY(-2px); }
+
+        /* 結果顯示區 */
+        #result-area { margin-top: 30px; padding: 20px; background: #fff; border: 2px solid #eee; border-radius: 12px; overflow-x: auto; position: relative; }
+        .screen { width: 60%; max-width: 400px; margin: 0 auto 40px auto; padding: 10px; background: #95a5a6; color: white; text-align: center; border-radius: 0 0 40px 40px; font-size: 14px; letter-spacing: 5px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+
+        /* 座位容器 */
+        .seating-chart { 
+            display: flex; 
+            gap: 15px; 
+            justify-content: center; 
+            padding-bottom: 20px;
+            min-width: min-content; /* 確保內容不被擠壓 */
+        }
+
+        /* 直排模式 (Column Mode) */
+        .column-container { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+        
+        /* 橫排模式 (Row Mode) */
+        .row-mode-container { display: flex; flex-direction: column; gap: 15px; width: 100%; align-items: center; }
+        .row-container { display: flex; gap: 10px; justify-content: center; }
+
+        .seat { 
+            border: 1px solid #bdc3c7; padding: 5px; text-align: center; background: #ebf5fb; 
+            border-radius: 6px; font-size: 14px; width: 90px; height: 50px; 
+            display: flex; align-items: center; justify-content: center; 
+            word-break: break-all; flex-shrink: 0; position: relative;
+        }
+        .seat.empty { background: #fdfdfd; color: #ddd; border-style: dashed; }
+        
+        .label-tag { font-size: 14px; font-weight: bold; color: var(--accent); margin-bottom: 5px; }
+        .hint { font-size: 12px; color: #7f8c8d; margin-top: 5px; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🪑 隨機座位產生器 <span style="font-size:0.6em; color:#7f8c8d;">(Pro)</span></h2>
+    
+    <div class="setup-card">
+        <label>1. 輸入名單 (或範圍 1-40)：</label>
+        <textarea id="nameList" placeholder="輸入方式：&#10;1. 號碼範圍：1-40&#10;2. 姓名清單：每行一個名字"></textarea>
+
+        <div class="control-row">
+            <div class="control-group">
+                <label>2. 選擇自訂模式：</label>
+                <div class="btn-toggle-group">
+                    <button class="btn-toggle" id="btn-mode-row" onclick="setMode('row')">橫排定義 (Row)</button>
+                    <button class="btn-toggle active" id="btn-mode-col" onclick="setMode('col')">直排定義 (Col)</button>
+                </div>
+                <div class="hint" id="mode-hint">由左至右設定：第一直排幾人，第二直排幾人...</div>
+            </div>
+
+            <div class="control-group">
+                <label>3. 人數設定 (用逗號隔開)：</label>
+                <input type="text" id="counts" placeholder="例如：6, 6, 6, 6 (四個直排)">
+            </div>
+        </div>
+
+        <div class="control-row">
+            <div class="control-group">
+                <label>4. 填寫方向 (怎麼塞人)：</label>
+                <select id="fillDirection">
+                    <option value="vertical">⬇️ 先填滿一直排 (縱向填寫)</option>
+                    <option value="horizontal">➡️ 先填滿一橫排 (橫向填寫)</option>
+                </select>
+            </div>
+        </div>
+
+        <button class="btn-generate" onclick="generateSeats()">🎲 產生座位表</button>
+    </div>
+
+    <div id="result-area" style="display:none;">
+        <div class="screen">講台 / 黑板</div>
+        <div id="chart-container"></div>
+    </div>
+</div>
+
+<script>
+    let currentMode = 'col'; // 預設為直排定義 (因為這是你的需求)
+
+    function setMode(mode) {
+        currentMode = mode;
+        document.getElementById('btn-mode-row').className = mode === 'row' ? 'btn-toggle active' : 'btn-toggle';
+        document.getElementById('btn-mode-col').className = mode === 'col' ? 'btn-toggle active' : 'btn-toggle';
+        
+        const hint = document.getElementById('mode-hint');
+        const input = document.getElementById('counts');
+        
+        if (mode === 'col') {
+            hint.innerText = "設定方式：由左至右，輸入「每一條直排」有幾個人";
+            input.placeholder = "例如：5, 6, 6, 5 (代表有4條直排)";
+        } else {
+            hint.innerText = "設定方式：由前至後，輸入「每一條橫排」有幾個人";
+            input.placeholder = "例如：5, 6, 6, 5 (代表有4條橫排)";
+        }
+    }
+
+    function parseNames(input) {
+        input = input.trim();
+        const rangeMatch = input.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (rangeMatch) {
+            const start = parseInt(rangeMatch[1]), end = parseInt(rangeMatch[2]);
+            const list = [];
+            const step = start <= end ? 1 : -1;
+            for (let i = start; start <= end ? i <= end : i >= end; i += step) list.push(i + "號");
+            return list;
+        }
+        return input.split('\n').map(n => n.trim()).filter(n => n !== "");
+    }
+
+    function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+    }
+
+    function generateSeats() {
+        const names = parseNames(document.getElementById('nameList').value);
+        const countsStr = document.getElementById('counts').value;
+        const counts = countsStr.split(/[,，]/).map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+        
+        if (names.length === 0) return alert("請輸入名單！");
+        if (counts.length === 0) return alert("請輸入每排/每列的人數！");
+
+        const fillDir = document.getElementById('fillDirection').value;
+        const container = document.getElementById('chart-container');
+        document.getElementById('result-area').style.display = 'block';
+        container.innerHTML = "";
+        
+        let shuffled = shuffle([...names]);
+
+        // 計算最大維度，建立 Grid Map
+        let maxCols = 0, maxRows = 0;
+        let seatMap = []; // [row][col]
+
+        if (currentMode === 'col') {
+            // 直排定義模式：counts = [第一直排人數, 第二直排人數...]
+            maxCols = counts.length;
+            maxRows = Math.max(...counts);
+            // 建立地圖：如果是直排定義，我們掃描每一欄(c)，只要 row < counts[c] 就是有效座位
+            seatMap = Array.from({ length: maxRows }, (_, r) => 
+                Array.from({ length: maxCols }, (_, c) => r < counts[c] ? "" : undefined)
+            );
+        } else {
+            // 橫排定義模式：counts = [第一橫排人數, 第二橫排人數...]
+            maxRows = counts.length;
+            maxCols = Math.max(...counts);
+            // 建立地圖：只要 col < counts[r] 就是有效座位
+            seatMap = Array.from({ length: maxRows }, (_, r) => 
+                Array.from({ length: maxCols }, (_, c) => c < counts[r] ? "" : undefined)
+            );
+        }
+
+        // 填入名字
+        let idx = 0;
+        if (fillDir === 'horizontal') {
+            // 橫向填：先填 Row 0 (所有Col), 再填 Row 1...
+            for (let r = 0; r < maxRows; r++) {
+                for (let c = 0; c < maxCols; c++) {
+                    if (seatMap[r][c] === "" && idx < shuffled.length) {
+                        seatMap[r][c] = shuffled[idx++];
+                    }
+                }
+            }
+        } else {
+            // 縱向填：先填 Col 0 (所有Row), 再填 Col 1...
+            for (let c = 0; c < maxCols; c++) {
+                for (let r = 0; r < maxRows; r++) {
+                    if (seatMap[r][c] === "" && idx < shuffled.length) {
+                        seatMap[r][c] = shuffled[idx++];
+                    }
+                }
+            }
+        }
+
+        // --- 渲染畫面 ---
+        // 為了讓你想要的效果最直觀，我使用 Flexbox 來繪製
+        // 如果是「直排定義」，我們就一欄一欄畫
+        
+        container.className = 'seating-chart';
+        
+        if (currentMode === 'col') {
+            // 渲染直排 (由左至右)
+            for (let c = 0; c < maxCols; c++) {
+                const colDiv = document.createElement('div');
+                colDiv.className = 'column-container';
+                
+                const label = document.createElement('div');
+                label.className = 'label-tag';
+                label.innerText = `直排 ${c + 1}`;
+                colDiv.appendChild(label);
+
+                for (let r = 0; r < maxRows; r++) {
+                    // 檢查這個位置是否在設定範圍內 (避免未定義區塊)
+                    // 如果該位置是 undefined，我們放一個透明的佔位，保持對齊
+                    if (seatMap[r][c] === undefined && r < counts[c]) { 
+                         // 這裡其實不會發生，因為 seatMap 是根據 counts 初始化的
+                         // 主要是處理視覺對齊，如果該直排人數較少，不需要產生下面的 div
+                    } else if (seatMap[r][c] !== undefined) {
+                         const seat = document.createElement('div');
+                         const name = seatMap[r][c];
+                         seat.className = 'seat' + (name ? '' : ' empty');
+                         seat.innerText = name || "空位";
+                         colDiv.appendChild(seat);
+                    }
+                }
+                container.appendChild(colDiv);
+            }
+        } else {
+            // 渲染橫排 (由上至下)
+            container.style.flexDirection = 'column';
+            for (let r = 0; r < maxRows; r++) {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'row-container';
+                
+                // 這裡可以加橫排標籤，但通常左側標籤比較難排版，這裡省略或簡單處理
+                
+                for (let c = 0; c < maxCols; c++) {
+                    if (seatMap[r][c] !== undefined) {
+                        const seat = document.createElement('div');
+                        const name = seatMap[r][c];
+                        seat.className = 'seat' + (name ? '' : ' empty');
+                        seat.innerText = name || "空位";
+                        rowDiv.appendChild(seat);
+                    } else {
+                        // 橫排模式下的對齊佔位 (可選)
+                    }
+                }
+                container.appendChild(rowDiv);
+            }
+        }
+    }
+</script>
+
+</body>
+</html>
